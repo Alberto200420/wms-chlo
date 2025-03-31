@@ -5,10 +5,7 @@ import os
 app = Flask(__name__)
 
 # Path to the SQLite database
-DATABASE = '/home/sparrow/wms/wms.db'
-
-# Debug: Print the database path
-print("Database Path:", os.path.abspath(DATABASE))
+DATABASE = 'wms.db'
 
 def get_db_connection():
     # Function to establish a connection to the database
