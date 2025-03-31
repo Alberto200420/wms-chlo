@@ -36,3 +36,28 @@ warehouse_display_prodcuts_query = """
         AND wc.product_id = i.product_id
     WHERE i.warehouse_id = ?
 """
+
+product_receipt_detail_query = """
+    SELECT 
+        pr.id as receipt_id,
+        pr.receipt_date,
+        pr.received_by,
+        json_group_array(
+            json_object(
+                'product_name', p.product_name,
+                'quantity_received', pri.quantity_received,
+                'expiration_date', pri.expiration_date
+            )
+        ) as items
+    FROM ProductReceipt pr
+    LEFT JOIN ProductReceiptItem pri ON pr.id = pri.receipt_id
+    LEFT JOIN Product p ON pri.product_id = p.id
+    WHERE pr.id = ?
+    GROUP BY pr.id, pr.receipt_date, pr.received_by
+"""
+
+create_purchase_order_query = """
+    INSERT INTO PurchaseOrder (warehouse_id, supplier_id, total_amount)
+    VALUES (1, ?, ?)
+    RETURNING id, warehouse_id, supplier_id, order_date, total_amount, status
+"""
