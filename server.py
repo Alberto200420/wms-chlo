@@ -1,11 +1,15 @@
-from flask import Flask, jsonify, request
+from flask import Flask, jsonify, request, make_response
 from commands.views.admin import *
 from commands.views.globalq import warehouse_fill_capacity_query
 from commands.views.boatman import get_product_capacity_query
 from commands.views.warehouse import get_suppliers_query
+import jwt
+import bcrypt
+import datetime
 import sqlite3, json
 app = Flask(__name__)
 DATABASE = 'wms.db'
+app.config['SECRET_KEY'] = 'your-secret-key-here'
 
 def execute_query(query, params=()):
     with sqlite3.connect(DATABASE) as conn:
@@ -384,6 +388,55 @@ def create_product_receipt():
 
     except sqlite3.Error as e:
         return jsonify({'error': str(e)}), 400
+
+
+@app.route("/v1/auth/login/", methods=["POST"])
+def login():
+    data = request.get_json()
+    
+    # Validate required fields
+    username = data.get('username')
+    password = data.get('password')
+    
+    if not username or not password:
+        return jsonify({'error': 'Username and password are required'}), 400
+    
+    user = execute_query("""
+        SELECT id, username, password, role
+        FROM "User"
+        WHERE username = ?
+    """, (username,))
+    
+    if not user:
+        return jsonify({'error': 'Invalid credentials'}), 401
+
+    user = user[0]
+    
+    # Verify password
+    if not bcrypt.checkpw(password.encode('utf-8'), user['password'].encode('utf-8')):
+        return jsonify({'error': 'Invalid credentials'}), 401
+
+    # Create token
+    token = jwt.encode({
+        'user_id': user['id'],
+        'username': user['username'],
+        'role': user['role'],
+        'exp': datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(hours=1)
+    }, app.config['SECRET_KEY'], algorithm='HS256')
+
+    response = make_response([], 200)
+    
+    # Set cookie
+    response.set_cookie(
+        'accessToken',
+        token,
+        httponly=True,
+        secure=True,
+        samesite='Strict',
+        max_age=3600
+    )
+    
+    return response
 
 if __name__ == "__main__":
     app.run(debug=True)
