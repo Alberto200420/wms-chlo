@@ -11,7 +11,7 @@ def init_db():
     cursor = conn.cursor()
     
     # Read and execute schema
-    with open('commands/init/schema.sql', 'r') as schema_file:
+    with open('commands/init/wmsInitData.sql', 'r') as schema_file:
         cursor.executescript(schema_file.read())
     
     # Read and execute initial data
