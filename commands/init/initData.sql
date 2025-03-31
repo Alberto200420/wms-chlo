@@ -69,3 +69,8 @@ INSERT INTO "WarehouseCapacity" ("warehouse_id", "product_id", "max_capacity", "
 (4, 3, 10, 50),
 (4, 4, 10, 50),
 (4, 5, 10, 50);
+
+INSERT INTO "Supplier" ("id", "supplier_name", "contact_info") VALUES
+(1, 'Vinos America', '3221560870'),
+(2, 'Coyul', '3221560880'),
+(3, 'Anfitrion de Mexico', '3221560890');
