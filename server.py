@@ -303,7 +303,87 @@ def get_suppliers():
     suppliers = execute_query(get_suppliers_query)
     return jsonify(suppliers)
 
+@app.route("/v1/warehouse/receive/", methods=["POST"])
+def create_product_receipt():
+    data = request.get_json()
+    
+    # Validate required fields
+    supplier_id = data.get('supplier_id')
+    products = data.get('products')
+    
+    if not supplier_id or not products:
+        return jsonify({'error': 'Supplier ID and products are required'}), 400
 
+    try:
+        # Get the first REQUESTED purchase order for this supplier
+        purchase_order = execute_query("""
+            SELECT po.id, po.supplier_id, s.supplier_name
+            FROM PurchaseOrder po
+            JOIN Supplier s ON s.id = po.supplier_id
+            WHERE po.supplier_id = ? AND po.status = 'REQUESTED'
+            ORDER BY po.order_date ASC
+            LIMIT 1
+        """, (supplier_id,))
+
+        if not purchase_order:
+            return jsonify({'error': 'No pending purchase orders found for this supplier'}), 404
+
+        # Create product receipt
+        receipt = execute_query("""
+            INSERT INTO ProductReceipt (purchase_order_id, received_by)
+            VALUES (?, ?)
+            RETURNING id
+        """, (purchase_order[0]['id'], 'warehouse_user'))
+
+        receipt_id = receipt[0]['id']
+
+        # Process each product
+        for product_data in products:
+            product_id = product_data['product_id']
+            quantity = product_data['quantity']
+            expiration_date = product_data.get('expiration_date')
+
+            # Create receipt item
+            execute_query("""
+                INSERT INTO ProductReceiptItem 
+                (receipt_id, warehouse_id, product_id, quantity_received, expiration_date)
+                VALUES (?, 1, ?, ?, ?)
+            """, (receipt_id, product_id, quantity, expiration_date))
+
+            # Update inventory
+            execute_query("""
+                INSERT INTO Inventory (warehouse_id, product_id, quantity, status)
+                VALUES (1, ?, ?, 'GOOD_CAPACITY')
+                ON CONFLICT(warehouse_id, product_id) DO UPDATE 
+                SET quantity = quantity + ?
+            """, (product_id, quantity, quantity))
+
+            # Update inventory status based on capacity
+            execute_query("""
+                UPDATE Inventory
+                SET status = CASE 
+                    WHEN (quantity * 100.0 / wc.max_capacity) > wc.capacity_percentage 
+                    THEN 'GOOD_CAPACITY' 
+                    ELSE 'LOW_CAPACITY' 
+                END
+                FROM WarehouseCapacity wc
+                WHERE Inventory.warehouse_id = wc.warehouse_id 
+                AND Inventory.product_id = wc.product_id
+                AND Inventory.warehouse_id = 1
+                AND Inventory.product_id = ?
+            """, (product_id,))
+
+        # Update purchase order status to RECEIVED
+        execute_query("""
+            UPDATE PurchaseOrder 
+            SET status = 'RECEIVED'
+            WHERE id = ?
+        """, (purchase_order[0]['id'],))
+
+        return jsonify({"message": "Product receipt created successfully","receipt_id": receipt_id}), 201
+
+    except sqlite3.Error as e:
+        return jsonify({'error': str(e)}), 400
 
 if __name__ == "__main__":
     app.run(debug=True)
