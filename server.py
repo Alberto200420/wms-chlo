@@ -5,6 +5,9 @@ from commands.views.admin import (
     product_receipt_detail_query,
     create_purchase_order_query
 )
+from commands.views.warehouse import (
+    warehouse_fill_capacity_query,
+)
 import sqlite3, json
 app = Flask(__name__)
 DATABASE = 'wms.db'
@@ -86,6 +89,23 @@ def create_purchase_order():
     except sqlite3.Error as e:
         return jsonify({'error': str(e)}), 400
 
+# ------------------------------------------------------------- WAREHOUSE
+# ------------------------------------------------ GET
+@app.route("/v1/warehouse/fill_capacity/", methods=["GET"])
+def warehouse_fill_capacity():
+    warehouse_id = request.args.get('warehouse_id')
+    if not warehouse_id:
+        return jsonify({"error": "warehouse_id query parameter is required"}), 400
+
+    # Check if warehouse exists
+    warehouse_query = "SELECT id FROM Warehouse WHERE id = ?"
+    warehouse = execute_query(warehouse_query, (warehouse_id,))
+    if not warehouse:
+        return jsonify({"error": "Warehouse not found"}), 404
+
+    # Get products that need filling
+    products = execute_query(warehouse_fill_capacity_query, (warehouse_id,))
+    return jsonify(products)
 
 if __name__ == "__main__":
     app.run(debug=True)
