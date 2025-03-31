@@ -27,6 +27,7 @@ CREATE TABLE "Inventory" (
     "quantity" INTEGER NOT NULL CHECK ("quantity" >= 0),
     "status" VARCHAR(13) NOT NULL CHECK ("status" IN ('LOW_CAPACITY', 'GOOD_CAPACITY')),
     "last_updated" TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE (warehouse_id, product_id),
     FOREIGN KEY("warehouse_id") REFERENCES "Warehouse"("id") ON DELETE CASCADE,
     FOREIGN KEY("product_id") REFERENCES "Product"("id") ON DELETE CASCADE
 );

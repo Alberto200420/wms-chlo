@@ -46,21 +46,25 @@ class ProductFillCapacitySerializer(serializers.Serializer):
     quantity_needed = serializers.IntegerField()
     max_capacity = serializers.IntegerField()
 
-class ProductTransferItemSerializer(serializers.Serializer):
-    product_id = serializers.IntegerField()
+class ProductTransferItemSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Inventory
+        fields = ['product', 'quantity_needed']
+
+    product = serializers.PrimaryKeyRelatedField(queryset=Product.objects.all())
     quantity_needed = serializers.IntegerField(min_value=1)
 
-class ProductTransferSerializer(serializers.Serializer):
-    from_warehouse = serializers.PrimaryKeyRelatedField(
-        queryset=Warehouse.objects.all()
-    )
-    to_warehouse = serializers.PrimaryKeyRelatedField(
-        queryset=Warehouse.objects.all()
-    )
+class ProductTransferSerializer(serializers.ModelSerializer):
     products_to_get = ProductTransferItemSerializer(many=True)
-    
+
+    class Meta:
+        model = Inventory
+        fields = ['from_warehouse', 'to_warehouse', 'products_to_get']
+
+    from_warehouse = serializers.PrimaryKeyRelatedField(queryset=Warehouse.objects.all())
+    to_warehouse = serializers.PrimaryKeyRelatedField(queryset=Warehouse.objects.all())
+
     def validate(self, data):
-        # Check that source and destination warehouses are different
         if data['from_warehouse'] == data['to_warehouse']:
             raise serializers.ValidationError("Source and destination warehouses must be different")
         return data

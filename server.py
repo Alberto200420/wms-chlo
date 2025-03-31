@@ -18,7 +18,7 @@ def execute_query(query, params=()):
         cursor = conn.cursor()
         cursor.execute(query, params)
         return [dict(row) for row in cursor.fetchall()]
-    
+
 # ------------------------------------------------------------- ADMINISTRATIVE
 # ------------------------------------------------ GET
 @app.route("/v1/administrative/home/", methods=["GET"])
@@ -107,5 +107,114 @@ def warehouse_fill_capacity():
     products = execute_query(warehouse_fill_capacity_query, (warehouse_id,))
     return jsonify(products)
 
+# ------------------------------------------------ PUT
+@app.route("/v1/warehouse/transfer/", methods=["PUT"])
+def product_transfer():
+    data = request.get_json()
+    
+    # Validate required fields
+    required_fields = ['from_warehouse', 'to_warehouse', 'products_to_get']
+    if not all(field in data for field in required_fields):
+        return jsonify({'error': 'Missing required fields','required': required_fields}), 400
+
+    if data['from_warehouse'] == data['to_warehouse']:
+        return jsonify({'error': 'Source and destination warehouses must be different'}), 400
+
+    # Validate warehouses exist
+    warehouses = execute_query(
+        "SELECT id, warehouse_name FROM Warehouse WHERE id IN (?, ?)", 
+        (data['from_warehouse'], data['to_warehouse'])
+    )
+    
+    if len(warehouses) != 2:
+        return jsonify({'error': 'One or both warehouses do not exist'}), 404
+
+    # Create a dictionary to map warehouse IDs to names
+    warehouse_names = {str(w['id']): w['warehouse_name'] for w in warehouses}
+    transfers = []
+
+    try:
+        for product_item in data['products_to_get']:
+            product_id = product_item['product_id']
+            quantity_needed = product_item['quantity_needed']
+
+            if quantity_needed <= 0:
+                return jsonify({'error': f'Invalid quantity for product {product_id}. Must be greater than 0'}), 400
+
+            # Check if product exists and get source inventory
+            source_inventory = execute_query("""
+                SELECT i.quantity, p.product_name 
+                FROM Inventory i
+                JOIN Product p ON p.id = i.product_id
+                WHERE i.warehouse_id = ? AND i.product_id = ?
+            """, (data['from_warehouse'], product_id))
+
+            if not source_inventory:
+                return jsonify({'error': f'Product {product_id} not found in source warehouse'}), 404
+
+            available_quantity = source_inventory[0]['quantity']
+            if available_quantity < quantity_needed:
+                return jsonify({'error': f'Insufficient inventory for product {product_id}','available': available_quantity,'requested': quantity_needed}), 400
+
+            # Update source warehouse inventory
+            execute_query("""
+                UPDATE Inventory
+                SET quantity = quantity - ?
+                WHERE warehouse_id = ? AND product_id = ?
+            """, (quantity_needed, data['from_warehouse'], product_id))
+
+            # Update or insert destination warehouse inventory
+            dest_inventory = execute_query("""
+                INSERT INTO Inventory (warehouse_id, product_id, quantity, status)
+                VALUES (?, ?, ?, 'GOOD_CAPACITY')
+                ON CONFLICT(warehouse_id, product_id) 
+                DO UPDATE SET quantity = quantity + ?
+                RETURNING id
+            """, (data['to_warehouse'], product_id, quantity_needed, quantity_needed))
+
+            # Update inventory status for both warehouses
+            for warehouse_id in [data['from_warehouse'], data['to_warehouse']]:
+                # Get current quantity and capacity data
+                inventory_data = execute_query("""
+                    SELECT i.quantity, wc.max_capacity, wc.capacity_percentage
+                    FROM Inventory i
+                    JOIN WarehouseCapacity wc ON wc.warehouse_id = i.warehouse_id 
+                        AND wc.product_id = i.product_id
+                    WHERE i.warehouse_id = ? AND i.product_id = ?
+                """, (warehouse_id, product_id))
+
+                if inventory_data:
+                    current_qty = inventory_data[0]['quantity']
+                    max_capacity = inventory_data[0]['max_capacity']
+                    threshold = inventory_data[0]['capacity_percentage']
+                    
+                    # Calculate and update status
+                    capacity_percentage = (current_qty / max_capacity) * 100
+                    new_status = 'GOOD_CAPACITY' if capacity_percentage > threshold else 'LOW_CAPACITY'
+                    
+                    execute_query("""
+                        UPDATE Inventory
+                        SET status = ?
+                        WHERE warehouse_id = ? AND product_id = ?
+                    """, (new_status, warehouse_id, product_id))
+
+            transfers.append({
+                'product_id': product_id,
+                'product_name': source_inventory[0]['product_name'],
+                'quantity': quantity_needed,
+                'from_warehouse': warehouse_names[str(data['from_warehouse'])],
+                'to_warehouse': warehouse_names[str(data['to_warehouse'])]
+            })
+
+        return jsonify({
+            'status': 'success',
+            'message': 'Products transferred successfully',
+            'transfers': transfers
+        })
+
+    except sqlite3.Error as e:
+        return jsonify({'error': str(e)}), 500
+
+    
 if __name__ == "__main__":
     app.run(debug=True)

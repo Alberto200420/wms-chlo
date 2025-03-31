@@ -115,7 +115,7 @@ class WarehouseFillCapacityView(views.APIView):
 
 # ----------------------------------- PUT
 class ProductTransferView(views.APIView):
-    permission_classes = [IsAdministrator|IsWarehouse|IsBoatman]
+    permission_classes = [IsAdministrator | IsWarehouse | IsBoatman]
 
     def put(self, request):
         logger.info("Received product transfer request: %s", request.data)
@@ -136,50 +136,45 @@ class ProductTransferView(views.APIView):
         try:
             with transaction.atomic():
                 for product_data in products_to_transfer:
-                    product_id = product_data['product_id']
+                    product = product_data['product']
                     quantity_needed = product_data['quantity_needed']
 
-                    logger.info("Processing transfer: Product ID %d, Quantity: %d", product_id, quantity_needed)
+                    logger.info("Processing transfer: Product %s, Quantity: %d", product.product_name, quantity_needed)
 
-                    # Get inventory records
                     source_inventory = Inventory.objects.get(
                         warehouse=source_warehouse,
-                        product_id=product_id
+                        product=product
                     )
                     destination_inventory, _ = Inventory.objects.get_or_create(
                         warehouse=destination_warehouse,
-                        product_id=product_id,
+                        product=product,
                         defaults={'quantity': 0, 'status': 'LOW_CAPACITY'}
                     )
 
-                    # Ensure enough stock is available in source warehouse
                     if source_inventory.quantity < quantity_needed:
-                        logger.warning("Insufficient quantity for Product ID %d: Available %d, Requested %d",
-                                       product_id, source_inventory.quantity, quantity_needed)
+                        logger.warning("Insufficient quantity for Product %s: Available %d, Requested %d",
+                                       product.product_name, source_inventory.quantity, quantity_needed)
                         transfer_errors.append({
-                            'product_id': product_id,
+                            'product': product.product_name,
                             'error': f'Insufficient quantity. Available: {source_inventory.quantity}, Requested: {quantity_needed}'
                         })
                         continue
 
-                    # Update source and destination inventory
                     source_inventory.quantity -= quantity_needed
                     destination_inventory.quantity += quantity_needed
 
-                    # Update inventory status based on warehouse capacity
                     self.update_inventory_status(source_inventory)
                     self.update_inventory_status(destination_inventory)
 
-                    # Save inventory changes
                     source_inventory.save()
                     destination_inventory.save()
 
-                    logger.info("Transfer successful: Product ID %d, %d units from %s to %s",
-                                product_id, quantity_needed,
+                    logger.info("Transfer successful: Product %s, %d units from %s to %s",
+                                product.product_name, quantity_needed,
                                 source_warehouse.warehouse_name, destination_warehouse.warehouse_name)
 
                     successful_transfers.append({
-                        'product_id': product_id,
+                        'product': product.product_name,
                         'quantity': quantity_needed,
                         'from_warehouse': source_warehouse.warehouse_name,
                         'to_warehouse': destination_warehouse.warehouse_name,
@@ -187,7 +182,6 @@ class ProductTransferView(views.APIView):
                         'destination_new_total': destination_inventory.quantity
                     })
 
-                # Rollback if any errors occurred
                 if transfer_errors:
                     logger.error("Some transfers failed: %s", transfer_errors)
                     raise ValueError("Transfer validation failed")
@@ -207,7 +201,6 @@ class ProductTransferView(views.APIView):
         }, status=status.HTTP_200_OK)
 
     def update_inventory_status(self, inventory):
-        """ Update inventory status based on warehouse capacity """
         capacity = WarehouseCapacity.objects.get(
             warehouse=inventory.warehouse,
             product=inventory.product
