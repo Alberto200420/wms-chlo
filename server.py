@@ -1,12 +1,8 @@
 from flask import Flask, jsonify, request
-from commands.views.admin import (
-    warehouse_home_display_query,
-    warehouse_display_prodcuts_query,
-    product_receipt_detail_query,
-    create_purchase_order_query
-)
+from commands.views.admin import *
 from commands.views.globalq import warehouse_fill_capacity_query
 from commands.views.boatman import get_product_capacity_query
+from commands.views.warehouse import get_suppliers_query
 import sqlite3, json
 app = Flask(__name__)
 DATABASE = 'wms.db'
@@ -304,7 +300,7 @@ def consume_products():
 # ------------------------------------------------------------------------- WAREHOUSE
 @app.route("/v1/warehouse/suppliers/", methods=["GET"])
 def get_suppliers():
-    suppliers = execute_query("SELECT id, supplier_name FROM Supplier")
+    suppliers = execute_query(get_suppliers_query)
     return jsonify(suppliers)
 
 
