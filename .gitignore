@@ -1,0 +1,44 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*.pyo
+
+# Virtual environment
+venv/
+env/
+
+# SQLite database files
+*.db
+*.sqlite
+
+# Logs and debug files
+*.log
+*.out
+*.err
+
+# OS-specific files
+.DS_Store
+Thumbs.db
+
+# Python-specific files
+*.egg
+*.egg-info/
+.eggs/
+
+# IDE-specific files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Flask debug files
+instance/
+*.pid
+
+# Backup files
+*.bak
+*.tmp
+*.old
+
+# Ignore Untitled files
+untitled:*
