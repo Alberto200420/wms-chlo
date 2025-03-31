@@ -5,9 +5,8 @@ from commands.views.admin import (
     product_receipt_detail_query,
     create_purchase_order_query
 )
-from commands.views.warehouse import (
-    warehouse_fill_capacity_query,
-)
+from commands.views.globalq import warehouse_fill_capacity_query
+from commands.views.boatman import get_product_capacity_query
 import sqlite3, json
 app = Flask(__name__)
 DATABASE = 'wms.db'
@@ -19,7 +18,7 @@ def execute_query(query, params=()):
         cursor.execute(query, params)
         return [dict(row) for row in cursor.fetchall()]
 
-# ------------------------------------------------------------- ADMINISTRATIVE
+# ------------------------------------------------------------------------- ADMINISTRATIVE
 # ------------------------------------------------ GET
 @app.route("/v1/administrative/home/", methods=["GET"])
 def warehouse_home_display():
@@ -87,7 +86,7 @@ def create_purchase_order():
         return jsonify({'error': str(e)}), 400
 
 
-# ------------------------------------------------------------- CAPTAN / WAREHOUSE
+# ------------------------------------------------------------------------- CAPTAN / WAREHOUSE
 # ------------------------------------------------ GET
 @app.route("/v1/warehouse/capacity_needed/", methods=["GET"])
 def warehouse_fill_capacity():
@@ -214,7 +213,7 @@ def product_transfer():
         return jsonify({'error': str(e)}), 500
 
 
-# ------------------------------------------------------------- BOATMAN
+# ------------------------------------------------------------------------- BOATMAN
 @app.route("/v1/boatman/consume_products/", methods=["PUT"])
 def consume_products():
     data = request.get_json()
@@ -240,18 +239,7 @@ def consume_products():
             quantity = product_data['quantity']
 
             # Get product details and inventory
-            product_inventory = execute_query("""
-                SELECT 
-                    i.quantity,
-                    p.product_name,
-                    wc.max_capacity,
-                    wc.capacity_percentage
-                FROM Inventory i
-                JOIN Product p ON p.id = i.product_id
-                JOIN WarehouseCapacity wc ON wc.warehouse_id = i.warehouse_id 
-                    AND wc.product_id = i.product_id
-                WHERE i.warehouse_id = ? AND i.product_id = ?
-            """, (warehouse_id, product_id))
+            product_inventory = execute_query(get_product_capacity_query, (warehouse_id, product_id))
 
             if not product_inventory:
                 consumption_errors.append({
@@ -311,6 +299,14 @@ def consume_products():
 
     except sqlite3.Error as e:
         return jsonify({'error': str(e)}), 500
+
+
+# ------------------------------------------------------------------------- WAREHOUSE
+@app.route("/v1/warehouse/suppliers/", methods=["GET"])
+def get_suppliers():
+    suppliers = execute_query("SELECT id, supplier_name FROM Supplier")
+    return jsonify(suppliers)
+
 
 
 if __name__ == "__main__":
