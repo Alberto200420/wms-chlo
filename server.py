@@ -61,7 +61,6 @@ def product_receipt_detail():
     receipt_data['items'] = json.loads(receipt_data['items'])
     
     return jsonify(receipt_data)
-
 # ------------------------------------------------ POST
 @app.route("/v1/administrative/purchase_order/create/", methods=["POST"])
 def create_purchase_order():
@@ -72,9 +71,7 @@ def create_purchase_order():
     total_amount = data.get('total_amount')
     
     if not supplier_id or not total_amount:
-        return jsonify({
-            'error': 'Supplier ID and Total amount are required'
-        }), 400
+        return jsonify({'error': 'Supplier ID and Total amount are required'}), 400
 
     # Check if supplier exists
     supplier_query = "SELECT id FROM Supplier WHERE id = ?"
@@ -89,9 +86,10 @@ def create_purchase_order():
     except sqlite3.Error as e:
         return jsonify({'error': str(e)}), 400
 
-# ------------------------------------------------------------- WAREHOUSE
+
+# ------------------------------------------------------------- CAPTAN / WAREHOUSE
 # ------------------------------------------------ GET
-@app.route("/v1/warehouse/fill_capacity/", methods=["GET"])
+@app.route("/v1/warehouse/capacity_needed/", methods=["GET"])
 def warehouse_fill_capacity():
     warehouse_id = request.args.get('warehouse_id')
     if not warehouse_id:
@@ -215,6 +213,105 @@ def product_transfer():
     except sqlite3.Error as e:
         return jsonify({'error': str(e)}), 500
 
+
+# ------------------------------------------------------------- BOATMAN
+@app.route("/v1/boatman/consume_products/", methods=["PUT"])
+def consume_products():
+    data = request.get_json()
     
+    # Validate required fields
+    warehouse_id = data.get('warehouse_id')
+    products_consumed = data.get('products_consumed')
+    
+    if not warehouse_id or not products_consumed:
+        return jsonify({'error': 'Warehouse ID and products consumed are required'}), 400
+
+    # Check if warehouse exists
+    warehouse = execute_query("SELECT warehouse_name FROM Warehouse WHERE id = ?", (warehouse_id,))
+    if not warehouse:
+        return jsonify({'error': 'Warehouse not found'}), 404
+
+    consumption_errors = []
+    successful_consumptions = []
+
+    try:
+        for product_data in products_consumed:
+            product_id = product_data['product_id']
+            quantity = product_data['quantity']
+
+            # Get product details and inventory
+            product_inventory = execute_query("""
+                SELECT 
+                    i.quantity,
+                    p.product_name,
+                    wc.max_capacity,
+                    wc.capacity_percentage
+                FROM Inventory i
+                JOIN Product p ON p.id = i.product_id
+                JOIN WarehouseCapacity wc ON wc.warehouse_id = i.warehouse_id 
+                    AND wc.product_id = i.product_id
+                WHERE i.warehouse_id = ? AND i.product_id = ?
+            """, (warehouse_id, product_id))
+
+            if not product_inventory:
+                consumption_errors.append({
+                    'product_id': product_id,
+                    'error': 'Product not found in warehouse inventory'
+                })
+                continue
+
+            current_quantity = product_inventory[0]['quantity']
+            product_name = product_inventory[0]['product_name']
+
+            # Check if warehouse has enough quantity
+            if current_quantity < quantity:
+                consumption_errors.append({
+                    'product_id': product_id,
+                    'product_name': product_name,
+                    'error': f'Insufficient quantity. Available: {current_quantity}, Requested: {quantity}'
+                })
+                continue
+
+            # Update inventory quantity
+            new_quantity = current_quantity - quantity
+            max_capacity = product_inventory[0]['max_capacity']
+            threshold = product_inventory[0]['capacity_percentage']
+            
+            # Calculate new status
+            capacity_percentage = (new_quantity / max_capacity) * 100
+            new_status = 'GOOD_CAPACITY' if capacity_percentage > threshold else 'LOW_CAPACITY'
+
+            # Update inventory
+            execute_query("""
+                UPDATE Inventory
+                SET quantity = ?, status = ?
+                WHERE warehouse_id = ? AND product_id = ?
+            """, (new_quantity, new_status, warehouse_id, product_id))
+
+            successful_consumptions.append({
+                'product_id': product_id,
+                'product_name': product_name,
+                'quantity': quantity,
+                'warehouse': warehouse[0]['warehouse_name'],
+                'remaining_quantity': new_quantity
+            })
+
+        if consumption_errors:
+            return jsonify({
+                'status': 'error',
+                'message': 'Some products could not be consumed',
+                'errors': consumption_errors
+            }), 400
+
+        return jsonify({
+            'status': 'success',
+            'message': 'Products consumed successfully',
+            'consumptions': successful_consumptions
+        })
+
+    except sqlite3.Error as e:
+        return jsonify({'error': str(e)}), 500
+
+
 if __name__ == "__main__":
     app.run(debug=True)
