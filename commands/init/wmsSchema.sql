@@ -1,11 +1,3 @@
--- Create the User table
-CREATE TABLE "User" (
-    "id" INTEGER PRIMARY KEY AUTOINCREMENT,
-    "username" VARCHAR(50) UNIQUE NOT NULL,
-    "password" VARCHAR(255) NOT NULL,
-    "role" VARCHAR(9) NOT NULL CHECK ("role" IN ('ADMIN', 'BOATMAN', 'DRIVER', 'WAREHOUSE'))
-);
-
 -- Create the Warehouse table
 CREATE TABLE "Warehouse" (
     "id" INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -27,6 +19,7 @@ CREATE TABLE "Inventory" (
     "quantity" INTEGER NOT NULL CHECK ("quantity" >= 0),
     "status" VARCHAR(13) NOT NULL CHECK ("status" IN ('LOW_CAPACITY', 'GOOD_CAPACITY')),
     "last_updated" TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE (warehouse_id, product_id),
     FOREIGN KEY("warehouse_id") REFERENCES "Warehouse"("id") ON DELETE CASCADE,
     FOREIGN KEY("product_id") REFERENCES "Product"("id") ON DELETE CASCADE
 );

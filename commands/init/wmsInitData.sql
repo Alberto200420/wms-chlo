@@ -1,10 +1,3 @@
--- Insert into "User" table
-INSERT INTO "User" ("id", "username", "password", "role") VALUES
-(1, 'jessica', '123', 'ADMIN'),
-(2, 'wina', '123', 'BOATMAN'),
-(3, 'don', '123', 'DRIVER'),
-(4, 'gaby', '123', 'WAREHOUSE');
-
 -- Insert warehouses
 INSERT INTO "Warehouse" ("id", "warehouse_name") VALUES
 (1, 'matris'),
@@ -59,13 +52,18 @@ INSERT INTO "WarehouseCapacity" ("warehouse_id", "product_id", "max_capacity", "
 (2, 3, 20, 50),
 (2, 4, 20, 50),
 (2, 5, 20, 50),
-(3, 1, 20, 50),
-(3, 2, 20, 50),
-(3, 3, 20, 50),
-(3, 4, 20, 50),
-(3, 5, 20, 50),
-(4, 1, 20, 50),
-(4, 2, 20, 50),
-(4, 3, 20, 50),
-(4, 4, 20, 50),
-(4, 5, 20, 50);
+(3, 1, 10, 50),
+(3, 2, 10, 50),
+(3, 3, 10, 50),
+(3, 4, 10, 50),
+(3, 5, 10, 50),
+(4, 1, 10, 50),
+(4, 2, 10, 50),
+(4, 3, 10, 50),
+(4, 4, 10, 50),
+(4, 5, 10, 50);
+
+INSERT INTO "Supplier" ("id", "supplier_name", "contact_info") VALUES
+(1, 'Vinos America', '3221560870'),
+(2, 'Coyul', '3221560880'),
+(3, 'Anfitrion de Mexico', '3221560890');
